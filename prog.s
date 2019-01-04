@@ -61,27 +61,31 @@ WAIT_FOR_COUNT:             ; 等待1s到来
     MOV     DX, I8255ADDC
     IN      AL, DX
     TEST    AL, 10H
-    JZ      COUNT_NOT_COME   ; 1s COUNT NOT COME
+    JZ      NEXT   ; 1s COUNT NOT COME
     
     MOV     BX, OFFSET COUNT ; 1s COUNT COME
     MOV     AX, [BX]
     DEC     AX
     CMP     AX, 0
     JE      COUNT_TO_0      ; COUNT TO 0, START CONVERSION
-AFTER_CONVERSION:           ; AFTER CONVERSION
+
 COUNT_ABOVE_0:
-    
+    MOV     [BX], AX
+    CALL    BUF_MINUS_1     ; 数码管缓冲区-1
+    JMP     NEXT
+
+AFTER_CONVERSION:           ; AFTER CONVERSION
+    JMP     NEXT
+
+NEXT:
+    CALL    DISPLAY
     ; RESET COUNTER 1
     MOV     DX, I8254DD1    
     MOV     AX, 1000
     OUT     DX, AL
     MOV     AL, AH
     OUT     DX, AL
-    
-    CALL    BUF_MINUS_1     ; 数码管缓冲区-1
 
-COUNT_NOT_COME:
-    CALL    DISPLAY
     JMP     WAIT_FOR_COUNT
 
 COUNT_TO_0:                 ; 倒计时到0，判断状态转换
@@ -142,7 +146,7 @@ BUF_MINUS_1     ENDP
 ; 更新STATE
 ; 将6个二极管更新成新状态
 ; 设置新的倒计时COUNT
-; 更新数码管显示缓存并调用DISPLAY更新数码管
+; 更新数码管显示缓存BUF并调用DISPLAY更新数码管
 ENTER_STATE_1   PROC    NEAR
     PUSH    AX
     PUSH    BX
