@@ -23,7 +23,7 @@ I8255ADDC   DW  28AH
 
 BUF         DB  4 DUP(0)    ; 数码管显示缓冲
 TAB         DB  3FH, 06H, 5BH, 4FH, 66H, 6DH, 7DH, 07H, 7FH, 6FH    ; 数码管段码
-BZ          DB  0F1H, 0F2H, 0F4H, 0F8H  ; 数码管位码
+BZ          DB  0F1H, 0F2H, 0F4H, 0F8H  ; 数码管位码, 对应S0-S3
 
 STATE       DB  0
 COUNT       DW  0
@@ -57,14 +57,97 @@ COUNT       DW  0
     OUT     DX, AL
 
     CALL    ENTER_STATE_1   ; ENTER STATE 1
+WAIT_FOR_COUNT:             ; 等待1s到来
     MOV     DX, I8255ADDC
     IN      AL, DX
     TEST    AL, 10H
-    JZ                      ; 1s COUNT NOT COME
-                             ; 1s COUNT COME
+    JZ      COUNT_NOT_COME   ; 1s COUNT NOT COME
+    
+    MOV     BX, OFFSET COUNT ; 1s COUNT COME
+    MOV     AX, [BX]
+    DEC     AX
+    CMP     AX, 0
+    JE      COUNT_TO_0      ; COUNT TO 0, START CONVERSION
+AFTER_CONVERSION:           ; AFTER CONVERSION
+COUNT_ABOVE_0:
+    
+    ; RESET COUNTER 1
+    MOV     DX, I8254DD1    
+    MOV     AX, 1000
+    OUT     DX, AL
+    MOV     AL, AH
+    OUT     DX, AL
+    
+    CALL    BUF_MINUS_1     ; 数码管缓冲区-1
+
+COUNT_NOT_COME:
+    CALL    DISPLAY
+    JMP     WAIT_FOR_COUNT
+
+COUNT_TO_0:                 ; 倒计时到0，判断状态转换
+    MOV     BX, OFFSET STATE
+    MOV     AL, [BX]
+    CMP     AL, 1
+    JE      CONVERT_TO_STATE_2
+    CMP     AL, 2
+    JE      CONVERT_TO_STATE_3
+    CMP     AL, 3
+    JE      CONVERT_TO_STATE_4
+    CMP     AL, 4
+    JE      CONVERT_TO_STATE_1
+
+CONVERT_TO_STATE_2:
+    CALL    ENTER_STATE_2
+    JMP     AFTER_CONVERSION
+
+CONVERT_TO_STATE_3:
+    CALL    ENTER_STATE_3
+    JMP     AFTER_CONVERSION
+
+CONVERT_TO_STATE_4:
+    CALL    ENTER_STATE_4
+    JMP     AFTER_CONVERSION
+
+CONVERT_TO_STATE_1:
+    CALL    ENTER_STATE_1
+    JMP     AFTER_CONVERSION
+
+
+; 将数码管显示缓冲的数值-1
+BUF_MINUS_1     PROC    NEAR
+    PUSH    AX
+    PUSH    CX
+    PUSH    SI
+
+    MOV     SI, OFFSET BUF
+    MOV     CX, 4
+
+    MOV     AL, [SI]
+    DEC     AL
+    CMP     AL, 0
+    JAE     NOT_BELOW_0      
+    ; AL < 0 AFTER DEC AL
+
+NOT_BELOW_0:
+    MOV     [SI], AL
+
+    POP     SI
+    POP     CX
+    POP     AX
+    RET
+BUF_MINUS_1     ENDP
     
 
+; 状态转换
+; 更新STATE
+; 将6个二极管更新成新状态
+; 设置新的倒计时COUNT
+; 更新数码管显示缓存并调用DISPLAY更新数码管
 ENTER_STATE_1   PROC    NEAR
+    PUSH    AX
+    PUSH    BX
+    PUSH    DX
+
     MOV     BX, OFFSET STATE
     MOV     [BX], STATE_1
     ; SET LIGHT
@@ -73,14 +156,23 @@ ENTER_STATE_1   PROC    NEAR
     OUT     DX, AL
     ; SET COUNTDOWN
     MOV     BX, OFFSET COUNT
-    MOV     [BX], 30    
+    MOV     AX, 30
+    MOV     [BX], AX    
+
     MOV     BX, OFFSET BUF
-    MOV     [BX], 0
-    MOV     [BX + 1], 0
-    MOV     [BX + 2], 3
-    MOV     [BX + 3], 0
+    MOV     AL, 0
+    MOV     [BX], AL
+    MOV     AL, 3
+    MOV     [BX + 1], AL
+    MOV     AL, 0
+    MOV     [BX + 2], AL
+    MOV     AL, 0
+    MOV     [BX + 3], AL
     CALL    DISPLAY
 
+    POP     DX
+    POP     BX
+    POP     AX
     RET
 ENTER_STATE_1   ENDP
 
@@ -89,7 +181,29 @@ ENTER_STATE_2   PROC    NEAR
     RET
 ENTER_STATE_2   ENDP
 
+ENTER_STATE_3   PROC    NEAR
+
+    RET
+ENTER_STATE_3   ENDP
+
+ENTER_STATE_4   PROC    NEAR
+
+    RET
+ENTER_STATE_4   ENDP
+
+; 根据数码管显示缓存更新数码管显示
+; BUF -- S0
+; BUF+1 -- S1
+; BUF+2 -- S2
+; BUF+3 -- S3
 DISPLAY     PROC    NEAR    ; 数码管显示数值，四位数值存放在BUF中
+    PUSH    AX
+    PUSH    BX
+    PUSH    CX
+    PUSH    DX
+    PUSH    SI
+    PUSH    DI
+
     MOV     SI, OFFSET BUF
     MOV     DI, OFFSET BZ
     MOV     CX, 4
@@ -109,11 +223,18 @@ DISP_L1:
     MOV     AL, 0F0H
     OUT     DX, AL
     LOOP    DISP_L1
+
+    POP     DI
+    POP     SI
+    POP     DX
+    POP     CX
+    POP     BX
+    POP     AX
     RET
 DISPLAY     ENDP
 
 
-
+; DELAY
 DELAY   PROC    NEAR
     PUSH    CX
     MOV     CX, 07FFH
