@@ -117,7 +117,7 @@ CONVERT_TO_STATE_1:
     JMP     AFTER_CONVERSION
 
 
-; 将数码管显示缓冲的数值-1
+; 将数码管显示缓冲BUF的数值-1
 BUF_MINUS_1     PROC    NEAR
     PUSH    AX
     PUSH    CX
@@ -125,12 +125,17 @@ BUF_MINUS_1     PROC    NEAR
 
     MOV     SI, OFFSET BUF
     MOV     CX, 4
-
+MINUS_L1:
     MOV     AL, [SI]
     DEC     AL
     CMP     AL, 0
     JAE     NOT_BELOW_0      
     ; AL < 0 AFTER DEC AL
+    MOV     AL, 9
+    MOV     [SI], AL
+    INC     SI
+    LOOP    MINUS_L1
+    
 
 NOT_BELOW_0:
     MOV     [SI], AL
