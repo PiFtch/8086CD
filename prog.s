@@ -181,17 +181,101 @@ ENTER_STATE_1   PROC    NEAR
 ENTER_STATE_1   ENDP
 
 ENTER_STATE_2   PROC    NEAR
+    PUSH    AX
+    PUSH    BX
+    PUSH    DX
 
+    MOV     BX, OFFSET STATE
+    MOV     [BX], STATE_2
+    ; SET LIGHT
+    MOV     AL, STATE_2_LIGHT
+    MOV     DX, I8255ADDB
+    OUT     DX, AL
+    ; SET COUNTDOWN
+    MOV     BX, OFFSET COUNT
+    MOV     AX, 3
+    MOV     [BX], AX    
+
+    MOV     BX, OFFSET BUF
+    MOV     AL, 3
+    MOV     [BX], AL
+    MOV     AL, 0
+    MOV     [BX + 1], AL
+    MOV     AL, 0
+    MOV     [BX + 2], AL
+    MOV     AL, 0
+    MOV     [BX + 3], AL
+    CALL    DISPLAY
+
+    POP     DX
+    POP     BX
+    POP     AX
     RET
 ENTER_STATE_2   ENDP
 
 ENTER_STATE_3   PROC    NEAR
+    PUSH    AX
+    PUSH    BX
+    PUSH    DX
 
+    MOV     BX, OFFSET STATE
+    MOV     [BX], STATE_2
+    ; SET LIGHT
+    MOV     AL, STATE_2_LIGHT
+    MOV     DX, I8255ADDB
+    OUT     DX, AL
+    ; SET COUNTDOWN
+    MOV     BX, OFFSET COUNT
+    MOV     AX, 30
+    MOV     [BX], AX    
+
+    MOV     BX, OFFSET BUF
+    MOV     AL, 0
+    MOV     [BX], AL
+    MOV     AL, 3
+    MOV     [BX + 1], AL
+    MOV     AL, 0
+    MOV     [BX + 2], AL
+    MOV     AL, 0
+    MOV     [BX + 3], AL
+    CALL    DISPLAY
+
+    POP     DX
+    POP     BX
+    POP     AX
     RET
 ENTER_STATE_3   ENDP
 
 ENTER_STATE_4   PROC    NEAR
+    PUSH    AX
+    PUSH    BX
+    PUSH    DX
 
+    MOV     BX, OFFSET STATE
+    MOV     [BX], STATE_3
+    ; SET LIGHT
+    MOV     AL, STATE_3_LIGHT
+    MOV     DX, I8255ADDB
+    OUT     DX, AL
+    ; SET COUNTDOWN
+    MOV     BX, OFFSET COUNT
+    MOV     AX, 3
+    MOV     [BX], AX    
+
+    MOV     BX, OFFSET BUF
+    MOV     AL, 3
+    MOV     [BX], AL
+    MOV     AL, 0
+    MOV     [BX + 1], AL
+    MOV     AL, 0
+    MOV     [BX + 2], AL
+    MOV     AL, 0
+    MOV     [BX + 3], AL
+    CALL    DISPLAY
+
+    POP     DX
+    POP     BX
+    POP     AX
     RET
 ENTER_STATE_4   ENDP
 
