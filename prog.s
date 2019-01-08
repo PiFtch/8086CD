@@ -1,16 +1,18 @@
-.MODEL  SMALL
-.STACK  100H
 
 STATE_1     EQU 1
-STATE_1_LIGHT   EQU 100001B
+STATE_1_LIGHT   EQU 10000001B
 STATE_2     EQU 2
-STATE_2_LIGHT   EQU 100010B
+STATE_2_LIGHT   EQU 10000010B
 STATE_3     EQU 3
-STATE_3_LIGHT   EQU 001100B
+STATE_3_LIGHT   EQU 00100100B
 STATE_4     EQU 4
-STATE_4_LIGHT   EQU 010100B
+STATE_4_LIGHT   EQU 01000100B
 
-.DATA
+TIME		EQU	1000
+
+DATA	SEGMENT
+DT	DB	100
+ORG	DATA
 MESG        DB  'TRAFFIC LIGHTS CONTROL$'
 I8254DD0    DW  280H
 I8254DD1    DW  281H
@@ -27,9 +29,23 @@ BZ          DB  0F1H, 0F2H, 0F4H, 0F8H  ; 数码管位码, 对应S0-S3
 
 STATE       DB  0
 COUNT       DW  0
+DATA	ENDS
 
-.CODE
-.STARTUP
+STACK	SEGMENT
+ST	DB	100	DUP(?)
+STACK ENDS
+
+CODE	SEGMENT
+START:
+    ASSUME 	CS:CODE,DS:DATA,SS:STACK
+    MOV	AX, DATA
+    MOV	DS, AX
+    MOV	ES, AX
+    MOV	AX, STACK
+    MOV	SS, AX
+
+    
+
     MOV     DX, OFFSET MESG ; 显示信息
     MOV     AH, 9
     INT     21H
@@ -42,7 +58,7 @@ COUNT       DW  0
     MOV     AL, 00110110B
     OUT     DX, AL
     MOV     DX, I8254DD0
-    MOV     AX, 1000
+    MOV     AX, TIME
     OUT     DX, AL
     MOV     AL, AH
     OUT     DX, AL
@@ -51,7 +67,7 @@ COUNT       DW  0
     MOV     AL, 01110000B
     OUT     DX, AL
     MOV     DX, I8254DD1
-    MOV     AX, 1000
+    MOV     AX, TIME
     OUT     DX, AL
     MOV     AL, AH
     OUT     DX, AL
@@ -61,9 +77,16 @@ WAIT_FOR_COUNT:             ; 等待1s到来
     MOV     DX, I8255ADDC
     IN      AL, DX
     TEST    AL, 10H
+    
     JZ      NEXT   ; 1s COUNT NOT COME
     
-    MOV     BX, OFFSET COUNT ; 1s COUNT COME
+    MOV     DX, I8254DD1 ; 1s COUNT COME   
+    MOV     AX, TIME
+    OUT     DX, AL
+    MOV     AL, AH
+    OUT     DX, AL
+
+    MOV     BX, OFFSET COUNT 
     MOV     AX, [BX]
     DEC     AX
     CMP     AX, 0
@@ -80,11 +103,11 @@ AFTER_CONVERSION:           ; AFTER CONVERSION
 NEXT:
     CALL    DISPLAY
     ; RESET COUNTER 1
-    MOV     DX, I8254DD1    
-    MOV     AX, 1000
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
+;    MOV     DX, I8254DD1    
+;    MOV     AX, TIME
+;    OUT     DX, AL
+;    MOV     AL, AH
+;    OUT     DX, AL
 
     JMP     WAIT_FOR_COUNT
 
@@ -129,7 +152,7 @@ MINUS_L1:
     MOV     AL, [SI]
     DEC     AL
     CMP     AL, 0
-    JAE     NOT_BELOW_0      
+    JGE     NOT_BELOW_0      
     ; AL < 0 AFTER DEC AL
     MOV     AL, 9
     MOV     [SI], AL
@@ -190,7 +213,9 @@ ENTER_STATE_2   PROC    NEAR
     PUSH    BX
     PUSH    DX
 
+
     MOV     BX, OFFSET STATE
+
     MOV     [BX], STATE_2
     ; SET LIGHT
     MOV     AL, STATE_2_LIGHT
@@ -336,6 +361,7 @@ LOP1:
     POP     CX
     RET
 DELAY   ENDP
+CODE	ENDS
+END START
 
-END
 
