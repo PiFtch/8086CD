@@ -1,4 +1,3 @@
-
 STATE_1     EQU 1
 STATE_1_LIGHT   EQU 10000001B
 STATE_2     EQU 2
@@ -43,8 +42,6 @@ START:
     MOV	ES, AX
     MOV	AX, STACK
     MOV	SS, AX
-
-    
 
     MOV     DX, OFFSET MESG ; 显示信息
     MOV     AH, 9
@@ -102,13 +99,6 @@ AFTER_CONVERSION:           ; AFTER CONVERSION
 
 NEXT:
     CALL    DISPLAY
-    ; RESET COUNTER 1
-;    MOV     DX, I8254DD1    
-;    MOV     AX, TIME
-;    OUT     DX, AL
-;    MOV     AL, AH
-;    OUT     DX, AL
-
     JMP     WAIT_FOR_COUNT
 
 COUNT_TO_0:                 ; 倒计时到0，判断状态转换
@@ -158,8 +148,6 @@ MINUS_L1:
     MOV     [SI], AL
     INC     SI
     LOOP    MINUS_L1
-    
-
 NOT_BELOW_0:
     MOV     [SI], AL
 
@@ -363,5 +351,3 @@ LOP1:
 DELAY   ENDP
 CODE	ENDS
 END START
-
-
