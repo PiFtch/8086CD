@@ -1,3 +1,6 @@
+KEEPCS DW 0
+KEEPIP DW 0
+
 STATE_1     EQU 1
 STATE_1_LIGHT   EQU 10000001B
 STATE_2     EQU 2
@@ -6,8 +9,6 @@ STATE_3     EQU 3
 STATE_3_LIGHT   EQU 00100100B
 STATE_4     EQU 4
 STATE_4_LIGHT   EQU 01000100B
-
-TIME		EQU	1000
 
 DATA	SEGMENT
 DT	DB	100
@@ -36,7 +37,7 @@ STACK ENDS
 
 CODE	SEGMENT
 START:
-    ASSUME 	CS:CODE,DS:DATA,SS:STACK
+    ASSUME 	CS:CODE, DS:DATA, SS:STACK
     MOV	AX, DATA
     MOV	DS, AX
     MOV	ES, AX
@@ -55,52 +56,85 @@ START:
     MOV     AL, 00110110B
     OUT     DX, AL
     MOV     DX, I8254DD0
-    MOV     AX, TIME
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
-
-    MOV     DX, I8254TYPE
-    MOV     AL, 01110000B
-    OUT     DX, AL
-    MOV     DX, I8254DD1
-    MOV     AX, TIME
+    MOV     AX, 0
     OUT     DX, AL
     MOV     AL, AH
     OUT     DX, AL
 
     CALL    ENTER_STATE_1   ; ENTER STATE 1
-WAIT_FOR_COUNT:             ; 等待1s到来
-    MOV     DX, I8255ADDC
-    IN      AL, DX
-    TEST    AL, 10H
-    
-    JZ      NEXT   ; 1s COUNT NOT COME
-    
-    MOV     DX, I8254DD1 ; 1s COUNT COME   
-    MOV     AX, TIME
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
 
+    CLI
+    ; 保存 1CH 原中断向量的地址
+    ; 35H　功能调用，取中断向量
+    ; 入口参数：
+    ; AL = 中断类型
+    ; 返回值：
+    ; ES = 中断服务程序入口段地址
+    ; BX = 中断服务程序入口偏移地址
+    MOV AH, 35H
+    MOV AL, 1CH
+    INT 21H
+    MOV KEEPCS, BX
+    MOV KEEPIP, ES
+
+    ; 将新的中断向量的地址写入中断向量表中中断类型号为　1CH 处
+    ; 25H 功能调用可以将中断向量写入中断向量表中
+    ; 25H 功能调用的入口参数为：
+    ; AH = 25H
+    ; AL = 中断类型号
+    ; DS = 中断服务程序入口段地址
+    ; DX = 中断服务程序入口偏移地址
+    PUSH DS
+    MOV DX, OFFSET NINT ; 新的中断处理子程序名字
+    MOV AX, SEG NINT
+    MOV DS, AX
+    MOV AH, 25H
+    MOV AL, 1CH
+    INT 21H
+    POP DS
+L:
+    MOV DH, 18 ; 18.2 Hz
+
+    STI
+
+LOP: 
+    CMP BL, 0
+    JG LOP
+    JMP L
+
+    ; 在程序结尾处，恢复原来的中断服务程序的入口地址
+    ; 无限循环程序，不会执行到该处
+DONE:
+    CLI
+    PUSH DS
+    MOV DX, KEEPIP
+    MOV AX, KEEPCS
+    MOV DS, AX
+    MOV AH, 25H
+    MOV AL, 1CH
+    INT 21H
+    POP DS
+    STI
+    MOV AH, 4C00H
+    INT 21H
+
+NINT PROC FAR
+    CLI
+
+    DEC DH
+    JNZ NEXT2
+    MOV DH, 18
     MOV     BX, OFFSET COUNT 
     MOV     AX, [BX]
     DEC     AX
     CMP     AX, 0
     JE      COUNT_TO_0      ; COUNT TO 0, START CONVERSION
 
-COUNT_ABOVE_0:
     MOV     [BX], AX
     CALL    BUF_MINUS_1     ; 数码管缓冲区-1
     JMP     NEXT
 
-AFTER_CONVERSION:           ; AFTER CONVERSION
-    JMP     NEXT
-
-NEXT:
-    CALL    DISPLAY
-    JMP     WAIT_FOR_COUNT
-
+; 当　COUNT 为　0 时，进行状态转换
 COUNT_TO_0:                 ; 倒计时到0，判断状态转换
     MOV     BX, OFFSET STATE
     MOV     AL, [BX]
@@ -115,20 +149,27 @@ COUNT_TO_0:                 ; 倒计时到0，判断状态转换
 
 CONVERT_TO_STATE_2:
     CALL    ENTER_STATE_2
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
 CONVERT_TO_STATE_3:
     CALL    ENTER_STATE_3
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
 CONVERT_TO_STATE_4:
     CALL    ENTER_STATE_4
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
 CONVERT_TO_STATE_1:
     CALL    ENTER_STATE_1
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
+NEXT:
+    CALL    DISPLAY
+
+NEXT2:
+    STI
+    IRET
+NINT ENDP
 
 ; 将数码管显示缓冲BUF的数值-1
 BUF_MINUS_1     PROC    NEAR
@@ -159,10 +200,10 @@ BUF_MINUS_1     ENDP
     
 
 ; 状态转换
-; 更新STATE
-; 将6个二极管更新成新状态
-; 设置新的倒计时COUNT
-; 更新数码管显示缓存BUF并调用DISPLAY更新数码管
+; 更新 STATE
+; 将 6 个二极管更新成新状态
+; 设置新的倒计时 COUNT
+; 更新数码管显示缓存 BUF 并调用 DISPLAY 更新数码管
 ENTER_STATE_1   PROC    NEAR
     PUSH    AX
     PUSH    BX
@@ -200,7 +241,6 @@ ENTER_STATE_2   PROC    NEAR
     PUSH    AX
     PUSH    BX
     PUSH    DX
-
 
     MOV     BX, OFFSET STATE
 
@@ -339,7 +379,6 @@ DISP_L1:
     RET
 DISPLAY     ENDP
 
-
 ; DELAY
 DELAY   PROC    NEAR
     PUSH    CX
@@ -349,5 +388,6 @@ LOP1:
     POP     CX
     RET
 DELAY   ENDP
+
 CODE	ENDS
 END START
