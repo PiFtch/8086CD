@@ -92,7 +92,7 @@ START:
     MOV AL, 1CH
     INT 21H
     POP DS
-L:
+
     MOV DH, 18 ; 18.2 Hz
 
     STI
@@ -100,7 +100,6 @@ L:
 LOP: 
     CMP BL, 0
     JG LOP
-    JMP L
 
     ; 在程序结尾处，恢复原来的中断服务程序的入口地址
     ; 无限循环程序，不会执行到该处
