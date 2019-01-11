@@ -1,4 +1,3 @@
-
 STATE_1     EQU 1
 STATE_1_LIGHT   EQU 10000001B
 STATE_2     EQU 2
@@ -8,15 +7,19 @@ STATE_3_LIGHT   EQU 00100100B
 STATE_4     EQU 4
 STATE_4_LIGHT   EQU 01000100B
 
-TIME		EQU	1000
+INIT_TIMES EQU 18
 
 DATA	SEGMENT
 DT	DB	100
 ORG	DATA
-MESG        DB  'TRAFFIC LIGHTS CONTROL$'
-I8254DD0    DW  280H
-I8254DD1    DW  281H
-I8254TYPE   DW  283H                                                             
+MESG        DB  'TRAFFIC LIGHTS CONTROL$'                                                        
+
+KEEPCS DW 0
+KEEPIP DW 0
+
+I8253DD0  DW 280H
+I8253DD1  DW 281H
+I8253TYPE DW 283H
 
 I8255TYPE   DW  28BH
 I8255ADDA   DW  288H
@@ -37,54 +40,54 @@ STACK ENDS
 
 CODE	SEGMENT
 START:
-    ASSUME 	CS:CODE,DS:DATA,SS:STACK
+    ASSUME 	CS:CODE, DS:DATA, SS:STACK
     MOV	AX, DATA
     MOV	DS, AX
     MOV	ES, AX
     MOV	AX, STACK
     MOV	SS, AX
 
-    
-
     MOV     DX, OFFSET MESG ; 显示信息
     MOV     AH, 9
     INT     21H
+	
 
-    MOV     DX, I8255TYPE
+MOV     DX, I8255TYPE
     MOV     AL, 10001000B
     OUT     DX, AL
 
-    MOV     DX, I8254TYPE
-    MOV     AL, 00110110B
-    OUT     DX, AL
-    MOV     DX, I8254DD0
-    MOV     AX, TIME
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
+MOV DX,I8253TYPE
+MOV AL,27H
+OUT DX,AL
+MOV DX,I8253DD0
+MOV AL,20H
+OUT DX,AL
+MOV DX,I8253TYPE
+MOV AL,61H
+OUT DX,AL
+MOV DX,I8253DD1
+MOV AL,10H
+OUT DX,AL
 
-    MOV     DX, I8254TYPE
-    MOV     AL, 01110000B
-    OUT     DX, AL
-    MOV     DX, I8254DD1
-    MOV     AX, TIME
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
+     MOV DX, OFFSET NINT ; 新的中断处理子程序名字
+    MOV AX, CS
+    MOV DS, AX
+    MOV AH, 25H
+    MOV AL, 1CH
+    INT 21H
 
-    CALL    ENTER_STATE_1   ; ENTER STATE 1
-WAIT_FOR_COUNT:             ; 等待1s到来
-    MOV     DX, I8255ADDC
-    IN      AL, DX
-    TEST    AL, 10H
-    
-    JZ      NEXT   ; 1s COUNT NOT COME
-    
-    MOV     DX, I8254DD1 ; 1s COUNT COME   
-    MOV     AX, TIME
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
+    MOV DH, INIT_TIMES ; 18.2 Hz
+
+    STI
+
+CYCLE:
+    JMP CYCLE
+
+NINT:
+   
+    DEC DH
+    JNZ NEXT2
+    MOV     DH, INIT_TIMES
 
     MOV     BX, OFFSET COUNT 
     MOV     AX, [BX]
@@ -92,25 +95,11 @@ WAIT_FOR_COUNT:             ; 等待1s到来
     CMP     AX, 0
     JE      COUNT_TO_0      ; COUNT TO 0, START CONVERSION
 
-COUNT_ABOVE_0:
     MOV     [BX], AX
     CALL    BUF_MINUS_1     ; 数码管缓冲区-1
     JMP     NEXT
 
-AFTER_CONVERSION:           ; AFTER CONVERSION
-    JMP     NEXT
-
-NEXT:
-    CALL    DISPLAY
-    ; RESET COUNTER 1
-;    MOV     DX, I8254DD1    
-;    MOV     AX, TIME
-;    OUT     DX, AL
-;    MOV     AL, AH
-;    OUT     DX, AL
-
-    JMP     WAIT_FOR_COUNT
-
+; 当　COUNT 为　0 时，进行状态转换
 COUNT_TO_0:                 ; 倒计时到0，判断状态转换
     MOV     BX, OFFSET STATE
     MOV     AL, [BX]
@@ -125,20 +114,32 @@ COUNT_TO_0:                 ; 倒计时到0，判断状态转换
 
 CONVERT_TO_STATE_2:
     CALL    ENTER_STATE_2
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
 CONVERT_TO_STATE_3:
     CALL    ENTER_STATE_3
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
 CONVERT_TO_STATE_4:
     CALL    ENTER_STATE_4
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
 CONVERT_TO_STATE_1:
     CALL    ENTER_STATE_1
-    JMP     AFTER_CONVERSION
+    JMP     NEXT
 
+NEXT:
+    CALL    DISPLAY
+
+NEXT2:
+	CALL PRINT_1
+      IRET
+
+PRINT_1 PROC NEAR
+MOV DL, '1'
+    MOV AH, 02
+    INT 21H
+PRINT_1 ENDP
 
 ; 将数码管显示缓冲BUF的数值-1
 BUF_MINUS_1     PROC    NEAR
@@ -158,8 +159,6 @@ MINUS_L1:
     MOV     [SI], AL
     INC     SI
     LOOP    MINUS_L1
-    
-
 NOT_BELOW_0:
     MOV     [SI], AL
 
@@ -171,10 +170,10 @@ BUF_MINUS_1     ENDP
     
 
 ; 状态转换
-; 更新STATE
-; 将6个二极管更新成新状态
-; 设置新的倒计时COUNT
-; 更新数码管显示缓存BUF并调用DISPLAY更新数码管
+; 更新 STATE
+; 将 6 个二极管更新成新状态
+; 设置新的倒计时 COUNT
+; 更新数码管显示缓存 BUF 并调用 DISPLAY 更新数码管
 ENTER_STATE_1   PROC    NEAR
     PUSH    AX
     PUSH    BX
@@ -212,7 +211,6 @@ ENTER_STATE_2   PROC    NEAR
     PUSH    AX
     PUSH    BX
     PUSH    DX
-
 
     MOV     BX, OFFSET STATE
 
@@ -351,6 +349,32 @@ DISP_L1:
     RET
 DISPLAY     ENDP
 
+; DELAY
+DELAY   PROC    NEAR
+    PUSH    CX
+    MOV     CX, 07FFH
+LOP1:
+    LOOP    LOP1
+    POP     CX
+    RET
+DELAY   ENDP
+
+CODE	ENDS
+END START
+ INC     DI
+    MOV     DX, I8255ADDC
+    MOV     AL, 0F0H
+    OUT     DX, AL
+    LOOP    DISP_L1
+
+    POP     DI
+    POP     SI
+    POP     DX
+    POP     CX
+    POP     BX
+    POP     AX
+    RET
+DISPLAY     ENDP
 
 ; DELAY
 DELAY   PROC    NEAR
@@ -361,7 +385,6 @@ LOP1:
     POP     CX
     RET
 DELAY   ENDP
+
 CODE	ENDS
 END START
-
-
