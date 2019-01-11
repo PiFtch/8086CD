@@ -1,6 +1,3 @@
-KEEPCS DW 0
-KEEPIP DW 0
-
 STATE_1     EQU 1
 STATE_1_LIGHT   EQU 10000001B
 STATE_2     EQU 2
@@ -10,13 +7,19 @@ STATE_3_LIGHT   EQU 00100100B
 STATE_4     EQU 4
 STATE_4_LIGHT   EQU 01000100B
 
+INIT_TIMES EQU 18
+
 DATA	SEGMENT
 DT	DB	100
 ORG	DATA
-MESG        DB  'TRAFFIC LIGHTS CONTROL$'
-I8254DD0    DW  280H
-I8254DD1    DW  281H
-I8254TYPE   DW  283H                                                             
+MESG        DB  'TRAFFIC LIGHTS CONTROL$'                                                        
+
+KEEPCS DW 0
+KEEPIP DW 0
+
+I8253DD0  DW 280H
+I8253DD1  DW 281H
+I8253TYPE DW 283H
 
 I8255TYPE   DW  28BH
 I8255ADDA   DW  288H
@@ -47,78 +50,45 @@ START:
     MOV     DX, OFFSET MESG ; 显示信息
     MOV     AH, 9
     INT     21H
+	
 
-    MOV     DX, I8255TYPE
+MOV     DX, I8255TYPE
     MOV     AL, 10001000B
     OUT     DX, AL
 
-    MOV     DX, I8254TYPE
-    MOV     AL, 00110110B
-    OUT     DX, AL
-    MOV     DX, I8254DD0
-    MOV     AX, 0
-    OUT     DX, AL
-    MOV     AL, AH
-    OUT     DX, AL
+MOV DX,I8253TYPE
+MOV AL,27H
+OUT DX,AL
+MOV DX,I8253DD0
+MOV AL,20H
+OUT DX,AL
+MOV DX,I8253TYPE
+MOV AL,61H
+OUT DX,AL
+MOV DX,I8253DD1
+MOV AL,10H
+OUT DX,AL
 
-    CALL    ENTER_STATE_1   ; ENTER STATE 1
-
-    CLI
-    ; 保存 1CH 原中断向量的地址
-    ; 35H　功能调用，取中断向量
-    ; 入口参数：
-    ; AL = 中断类型
-    ; 返回值：
-    ; ES = 中断服务程序入口段地址
-    ; BX = 中断服务程序入口偏移地址
-    MOV AH, 35H
-    MOV AL, 1CH
-    INT 21H
-    MOV KEEPCS, BX
-    MOV KEEPIP, ES
-
-    ; 将新的中断向量的地址写入中断向量表中中断类型号为　1CH 处
-    ; 25H 功能调用可以将中断向量写入中断向量表中
-    ; 25H 功能调用的入口参数为：
-    ; AH = 25H
-    ; AL = 中断类型号
-    ; DS = 中断服务程序入口段地址
-    ; DX = 中断服务程序入口偏移地址
-    PUSH DS
-    MOV DX, OFFSET NINT ; 新的中断处理子程序名字
-    MOV AX, SEG NINT
+     MOV DX, OFFSET NINT ; 新的中断处理子程序名字
+    MOV AX, CS
     MOV DS, AX
     MOV AH, 25H
     MOV AL, 1CH
     INT 21H
-    POP DS
 
-    MOV DH, 18 ; 18.2 Hz
+    MOV DH, INIT_TIMES ; 18.2 Hz
 
     STI
 
-    ; 在程序结尾处，恢复原来的中断服务程序的入口地址
-    ; 无限循环程序，不会执行到该处
-DONE:
-    CLI
-    PUSH DS
-    MOV DX, KEEPIP
-    MOV AX, KEEPCS
-    MOV DS, AX
-    MOV AH, 25H
-    MOV AL, 1CH
-    INT 21H
-    POP DS
-    STI
-    MOV AH, 4C00H
-    INT 21H
+CYCLE:
+    JMP CYCLE
 
-NINT PROC FAR
-    CLI
-
+NINT:
+   
     DEC DH
     JNZ NEXT2
-    MOV DH, 18
+    MOV     DH, INIT_TIMES
+
     MOV     BX, OFFSET COUNT 
     MOV     AX, [BX]
     DEC     AX
@@ -162,9 +132,14 @@ NEXT:
     CALL    DISPLAY
 
 NEXT2:
-    STI
-    IRET
-NINT ENDP
+	CALL PRINT_1
+      IRET
+
+PRINT_1 PROC NEAR
+MOV DL, '1'
+    MOV AH, 02
+    INT 21H
+PRINT_1 ENDP
 
 ; 将数码管显示缓冲BUF的数值-1
 BUF_MINUS_1     PROC    NEAR
@@ -360,6 +335,33 @@ DISP_L1:
     CALL    DELAY
     INC     SI
     INC     DI
+    MOV     DX, I8255ADDC
+    MOV     AL, 0F0H
+    OUT     DX, AL
+    LOOP    DISP_L1
+
+    POP     DI
+    POP     SI
+    POP     DX
+    POP     CX
+    POP     BX
+    POP     AX
+    RET
+DISPLAY     ENDP
+
+; DELAY
+DELAY   PROC    NEAR
+    PUSH    CX
+    MOV     CX, 07FFH
+LOP1:
+    LOOP    LOP1
+    POP     CX
+    RET
+DELAY   ENDP
+
+CODE	ENDS
+END START
+ INC     DI
     MOV     DX, I8255ADDC
     MOV     AL, 0F0H
     OUT     DX, AL
